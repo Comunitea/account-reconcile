@@ -3,6 +3,9 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 from odoo import models, api
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class MassReconcileSimple(models.AbstractModel):
@@ -20,7 +23,13 @@ class MassReconcileSimple(models.AbstractModel):
         count = 0
         res = []
         while (count < len(lines)):
+            _logger.info("REGISTROS comprobados %s ", count)
+            ctx = self.env.context.copy()
+            ctx['commit_every'] = (
+                self.account_id.company_id.reconciliation_commit_every
+            )
             for i in range(count + 1, len(lines)):
+                #_logger.info("Comprobacion bucle %s" , i)
                 if lines[count][self._key_field] != lines[i][self._key_field]:
                     break
                 check = False
@@ -40,7 +49,14 @@ class MassReconcileSimple(models.AbstractModel):
                     )
                 if reconciled:
                     res += [credit_line['id'], debit_line['id']]
+                    _logger.info("CONCILIADO!!")
                     del lines[i]
+                    if (ctx['commit_every'] and
+                            len(res) % ctx['commit_every'] == 0):
+                        self.env.cr.commit()
+                        _logger.info(
+                            "Commit the reconciliations after %d lines",
+                            len(res))
                     break
             count += 1
         return res
